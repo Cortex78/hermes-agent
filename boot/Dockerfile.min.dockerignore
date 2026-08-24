@@ -1,0 +1,55 @@
+# Build context for boot/Dockerfile.min. BuildKit prefers <dockerfile>.dockerignore
+# over the root .dockerignore, so this file governs this build only and the
+# shipped Dockerfile's context rules are untouched.
+#
+# This is an allowlist, not a denylist, and that is the point: the minimal image
+# is defined by what a recorded turn touched, so the context is the 25 top-level
+# paths in boot/closure.txt and nothing else. The root .dockerignore excludes
+# *.md, which would silently drop AGENTS.md — a file the agent genuinely opens
+# on the turn path. An allowlist makes that class of omission impossible.
+#
+# When boot/closure.txt gains a new top-level entry, add it here or the build
+# fails loudly in collect_rootfs.sh rather than producing a broken image.
+
+*
+
+!boot
+
+# Top-level modules on the recorded turn path
+!hermes
+!hermes_bootstrap.py
+!hermes_constants.py
+!hermes_logging.py
+!hermes_state.py
+!hermes_state_common.py
+!hermes_state_portability.py
+!hermes_state_schema.py
+!hermes_state_search.py
+!hermes_time.py
+!model_tools.py
+!registration_lifecycle.py
+!run_agent.py
+!toolsets.py
+!utils.py
+
+# Packages
+!acp_adapter
+!agent
+!cron
+!gateway
+!hermes_cli
+!plugins
+!providers
+!tools
+
+# Data files the agent opens at import time
+!AGENTS.md
+!package.json
+!pyproject.toml
+!.bytecode-fingerprint
+
+# Never, under any allowlist
+.git
+**/__pycache__
+**/node_modules
+**/*.pyc

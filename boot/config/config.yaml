@@ -1,0 +1,25 @@
+# The minimum config for one non-interactive turn.
+#
+# Every key here is load-bearing:
+#   model.provider/base_url  - without a config file, provider resolution falls
+#                              through to OpenRouter even when OPENAI_BASE_URL
+#                              is set in the environment (hermes_constants.py
+#                              hardcodes the config path; HERMES_CONFIG is
+#                              denylisted but never implemented).
+#   security.allow_lazy_installs - the only absolute kill switch.
+#                              HERMES_DISABLE_LAZY_INSTALLS=1 is NOT one: it
+#                              returns true when a lazy-install target is set,
+#                              which the shipped Dockerfile does set, so the
+#                              seal redirects installs rather than blocking them.
+#   toolsets.enabled         - requested, but see boot/README.md: it does not
+#                              actually constrain the advertised tool set (18
+#                              tools still reach the model). Kept because the
+#                              intent is right even though the mechanism is not.
+model:
+  provider: custom
+  base_url: http://hermes-min-mock:8099/v1
+  default: mock-model
+security:
+  allow_lazy_installs: false
+toolsets:
+  enabled: [terminal]

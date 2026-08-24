@@ -1,0 +1,11 @@
+# Tier-4: the only wheels a single non-interactive `hermes -z` turn actually
+# imports. Derived by instrumenting sys.modules at the end of a successful turn,
+# not by reading pyproject.toml — 20 of the 27 core pins are never loaded.
+# Pins mirror [project].dependencies exactly; do not float them here.
+openai==2.24.0
+certifi==2026.5.20
+python-dotenv==1.2.2
+httpx[socks]==0.28.1
+pyyaml==6.0.3
+requests==2.33.0
+urllib3>=2.7.0,<3

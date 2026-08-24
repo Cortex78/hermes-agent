@@ -1,0 +1,50 @@
+# Minimal rootfs + mock inference endpoint, both on the same scratch image.
+#
+#   docker compose -f boot/docker-compose.min.yml up --build mock
+#   docker compose -f boot/docker-compose.min.yml run --rm agent -z "run the terminal tool"
+#
+# For the assertion suite use boot/scripts/verify.sh instead; this file is for
+# poking at the thing by hand.
+#
+# `agent` writes to ./boot/.data — the writable volume is deliberately separate
+# from the image, because $HERMES_HOME must be writable with working
+# fcntl(F_SETLK) and the image itself is read-only in every other respect.
+
+services:
+  mock:
+    build:
+      context: ..
+      dockerfile: boot/Dockerfile.min
+      target: mock
+    image: hermes-mock:latest
+    container_name: hermes-min-mock
+    command:
+      - --scenario
+      - ${MOCK_SCENARIO:-toolcall}
+      - --tool-name
+      - terminal
+      - --log
+      - /tmp/wire.jsonl
+    networks: [minnet]
+
+  agent:
+    build:
+      context: ..
+      dockerfile: boot/Dockerfile.min
+      target: min
+    image: hermes-min:latest
+    depends_on: [mock]
+    environment:
+      OPENAI_API_KEY: sk-mock
+      HERMES_HOME: /opt/data
+    volumes:
+      - ./.data:/opt/data
+    networks: [minnet]
+    # config.yaml is mandatory: with base_url supplied only through the
+    # environment, provider resolution falls through to OpenRouter rather than
+    # to the configured host. Create ./boot/.data/config.yaml first — see
+    # boot/config/config.yaml for the file this expects.
+
+networks:
+  minnet:
+    name: hermes-min-net

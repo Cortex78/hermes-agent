@@ -1,0 +1,25 @@
+{
+  "categories": {
+    "repo_data": {
+      "bytes": 180781,
+      "files": 59
+    },
+    "repo_source": {
+      "bytes": 16744323,
+      "files": 440
+    },
+    "stdlib": {
+      "bytes": 4292950,
+      "files": 196
+    },
+    "wheels": {
+      "bytes": 15097937,
+      "files": 1044
+    }
+  },
+  "modules_loaded": 1836,
+  "prompt": "run the terminal tool",
+  "rc": 0,
+  "repo_files_in_manifest": 499,
+  "total_bytes": 36315991
+}

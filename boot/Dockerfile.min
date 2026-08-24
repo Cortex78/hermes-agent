@@ -1,0 +1,86 @@
+# Minimal rootfs for one non-interactive hermes turn, built FROM scratch.
+#
+# This is the buildable form of the byte ledger in boot/README.md. It is not a
+# slimmed Debian: the final stage starts from nothing and receives only files
+# that a recorded, tool-calling turn actually touched. A missing row does not
+# shrink the image, it breaks it — which is why this doubles as the ledger's
+# verification.
+#
+#   docker build -f boot/Dockerfile.min -t hermes-min:latest .
+#   bash boot/scripts/verify.sh
+#
+# Deliberately absent, and each one is a measured claim in the README: node,
+# npm, git, ripgrep, ffmpeg, docker-cli, openssh, s6-overlay, uv, gcc/g++/make/
+# cmake, the 20 core pyproject pins a turn never imports, and every extra.
+
+# ---------------------------------------------------------------- build stage
+FROM python:3.11-slim-bookworm AS builder
+
+# busybox arrives from its own image rather than apt: it keeps the build free of
+# a package-index round trip, and the musl build is fully static, so it drops
+# into the scratch stage with no library closure of its own.
+COPY --from=busybox:1.36.1-musl /bin/busybox /bin/busybox
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
+
+# Tier-4 only: the seven pins a recorded turn imports, not the 27 in
+# [project].dependencies. The venv exists for uv's benefit; the scratch image
+# invokes the interpreter directly and reaches site-packages through PYTHONPATH,
+# so no venv bootstrap has to survive the copy.
+#
+# The CA secret is for build environments behind a TLS-intercepting proxy. It is
+# a BuildKit secret so it never lands in a layer, and the build works without it.
+COPY boot/requirements-tier4.txt /tmp/requirements-tier4.txt
+RUN --mount=type=secret,id=ca_bundle,target=/tmp/ca_bundle.crt \
+    sh -eux -c '\
+      if [ -s /tmp/ca_bundle.crt ]; then \
+        export SSL_CERT_FILE=/tmp/ca_bundle.crt REQUESTS_CA_BUNDLE=/tmp/ca_bundle.crt \
+               UV_NATIVE_TLS=1 CURL_CA_BUNDLE=/tmp/ca_bundle.crt; \
+      fi; \
+      uv venv --python 3.11 /opt/venv; \
+      UV_LINK_MODE=copy uv pip install --python /opt/venv/bin/python \
+        -r /tmp/requirements-tier4.txt'
+
+# ------------------------------------------------------------ collector stage
+FROM builder AS collector
+
+WORKDIR /src
+# closure.txt drives the copy, so it must be present and current. Regenerate
+# with boot/scripts/record_closure.py whenever the import graph moves.
+COPY boot/closure.txt /src/boot/closure.txt
+COPY boot/scripts/collect_rootfs.sh /src/boot/scripts/collect_rootfs.sh
+COPY . /src
+
+RUN chmod +x /src/boot/scripts/collect_rootfs.sh \
+    && OUT=/out SRC=/src VENV=/opt/venv PYVER=3.11 PYHOME=/usr/local \
+       sh /src/boot/scripts/collect_rootfs.sh \
+    && du -sb /out | cut -f1 > /tmp/rootfs-bytes \
+    && echo "[collector] rootfs bytes: $(cat /tmp/rootfs-bytes)"
+
+# ---------------------------------------------------------------- final stage
+FROM scratch AS min
+
+COPY --from=collector /out/ /
+
+ENV PYTHONPATH=/opt/hermes:/opt/venv/lib/python3.11/site-packages \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/usr/local/bin:/bin \
+    HOME=/root \
+    HERMES_HOME=/opt/data \
+    LANG=C.UTF-8
+
+WORKDIR /opt/hermes
+
+# No shell in the image beyond busybox, so exec form is mandatory.
+ENTRYPOINT ["/usr/local/bin/python3.11", "/opt/hermes/hermes"]
+CMD ["-z", "say MINIMAL_BOOT"]
+
+# ------------------------------------------------------------------ mock stage
+# The mock inference endpoint is stdlib-only by design, so it runs on the same
+# minimal rootfs it is used to test. If this stage fails to start, the rootfs is
+# missing something the agent stage would have needed too.
+FROM min AS mock
+COPY boot/mock/mock_endpoint.py /opt/mock/mock_endpoint.py
+ENV MOCK_HOST=0.0.0.0 MOCK_PORT=8099
+ENTRYPOINT ["/usr/local/bin/python3.11", "/opt/mock/mock_endpoint.py"]
+CMD []
